@@ -1,7 +1,7 @@
 #![allow(unused_parens)]
 
-use {TryRead, TryWrite, Result, check_len};
 use core::mem;
+use {check_len, Result, TryRead, TryWrite};
 
 /// Endian of numbers.
 ///
@@ -52,13 +52,18 @@ pub const NATIVE: Endian = BE;
 
 macro_rules! num_impl {
     ($ty: ty, $size: tt) => {
-
         impl<'a> TryRead<'a, Endian> for $ty {
             #[inline]
             fn try_read(bytes: &'a [u8], endian: Endian) -> Result<(Self, usize)> {
+                use core::ptr;
+
                 check_len(bytes, $size)?;
 
-                let val: $ty = unsafe { *(&bytes[0] as *const _ as *const _) };
+                let val: &mut $ty = &mut Default::default();
+                unsafe {
+                    ptr::copy_nonoverlapping(bytes.as_ptr(), val as *mut $ty as *mut u8, $size);
+                }
+
                 let val = match endian {
                     Endian::Big => val.to_be(),
                     Endian::Little => val.to_le(),
@@ -71,6 +76,8 @@ macro_rules! num_impl {
         impl TryWrite<Endian> for $ty {
             #[inline]
             fn try_write(self, bytes: &mut [u8], endian: Endian) -> Result<usize> {
+                use core::ptr;
+
                 check_len(bytes, $size)?;
 
                 let val = match endian {
@@ -78,13 +85,15 @@ macro_rules! num_impl {
                     Endian::Little => self.to_le(),
                 };
 
-                unsafe { *(&mut bytes[0] as *mut _ as *mut _) = val };
+                unsafe {
+                    let val = &val as *const $ty as *const [u8; $size];
+                    ptr::copy_nonoverlapping((*val).as_ptr(), bytes.as_mut_ptr(), $size);
+                }
 
                 Ok($size)
             }
         }
-
-    }
+    };
 }
 
 num_impl!(u8, 1);
@@ -100,7 +109,6 @@ num_impl!(isize, (mem::size_of::<isize>()));
 
 macro_rules! float_impl {
     ($ty: ty, $base: ty) => {
-
         impl<'a> TryRead<'a, Endian> for $ty {
             #[inline]
             fn try_read(bytes: &'a [u8], endian: Endian) -> Result<(Self, usize)> {
@@ -112,11 +120,14 @@ macro_rules! float_impl {
         impl<'a> TryWrite<Endian> for $ty {
             #[inline]
             fn try_write(self, bytes: &mut [u8], endian: Endian) -> Result<usize> {
-                <$base as TryWrite<Endian>>::try_write(unsafe { mem::transmute(self) }, bytes, endian)
+                <$base as TryWrite<Endian>>::try_write(
+                    unsafe { mem::transmute(self) },
+                    bytes,
+                    endian,
+                )
             }
         }
-
-    }
+    };
 }
 
 float_impl!(f32, u32);

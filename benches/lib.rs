@@ -4,10 +4,10 @@ extern crate byte;
 extern crate byteorder;
 extern crate test;
 
-use test::black_box;
-use byteorder::*;
-use byte::*;
 use byte::ctx::*;
+use byte::*;
+use byteorder::*;
+use test::black_box;
 
 #[bench]
 fn bench_byteorder(b: &mut test::Bencher) {

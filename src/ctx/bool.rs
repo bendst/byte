@@ -1,11 +1,17 @@
-use {TryRead, TryWrite, Result, check_len};
+use {check_len, Error, Result, TryRead, TryWrite};
 
 impl<'a> TryRead<'a> for bool {
     #[inline]
     fn try_read(bytes: &'a [u8], _ctx: ()) -> Result<(Self, usize)> {
         check_len(bytes, 1)?;
 
-        Ok((bytes[0] != 0, 1))
+        match bytes[0] {
+            1 => Ok((true, 1)),
+            0 => Ok((false, 1)),
+            _ => Err(Error::BadInput {
+                err: "Invalid bool encoding",
+            }),
+        }
     }
 }
 
@@ -14,8 +20,7 @@ impl TryWrite for bool {
     fn try_write(self, bytes: &mut [u8], _ctx: ()) -> Result<usize> {
         check_len(bytes, 1)?;
 
-        bytes[0] = if self { u8::max_value() } else { 0 };
-
+        bytes[0] = if self { 1 } else { 0 };
         Ok(1)
     }
 }

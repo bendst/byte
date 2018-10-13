@@ -43,27 +43,27 @@
 //!
 //! ```
 //! use byte::*;
-//! 
+//!
 //! let bytes: &[u8] = &[0xde, 0xad, 0xbe, 0xef];
-//! 
+//!
 //! let offset = &mut 0;
 //! let num = bytes.read_with::<u32>(offset, BE).unwrap();
 //! assert_eq!(num, 0xdeadbeef);
 //! assert_eq!(*offset, 4);
 //! ```
-//! 
+//!
 //! ```
 //! use byte::*;
 //! use byte::ctx::{Str, NULL};
-//! 
+//!
 //! let bytes: &[u8] = b"hello, world!\0dump";
-//! 
+//!
 //! let offset = &mut 0;
 //! let str = bytes.read_with::<&str>(offset, Str::Delimiter(NULL)).unwrap();
 //! assert_eq!(str, "hello, world!");
 //! assert_eq!(*offset, 14);
 //! ```
-//! 
+//!
 //! `Byte` supports language primitives by default.
 //!
 //! - `&str` (with context `Str`)
@@ -77,11 +77,11 @@
 //!
 //! In this example, we defined a custom type `Header`, which have a varibal-length name and a `bool` field.
 //! We implement `TryRead` and `TryWrite` to enable this type to be serialzed and deserialized.
-//! 
+//!
 //! Below is an example of communication protocol
 //!
 //! ## Protocol Byte Representation
-//! 
+//!
 //! ```text
 //! |       | Length of name (Big Endian) |                Name              | Enabled |
 //! | ----- | --------------------------- | ---- | ---- | ---- | ---- | ---- | ------- |
@@ -89,7 +89,7 @@
 //! ```
 //!
 //! Below is the code to realize a reader and writer to it.
-//! 
+//!
 //! Note that the `bytes` passed in is splitted by offset and should be read at head.
 //! Type `Result` is an alias as `core::result::Result<(T, size), byte::Error>`,
 //! where the size is the number of bytes `read` or `write` consumed and it will be used to increase the offset.
@@ -147,8 +147,8 @@
 #![no_std]
 
 pub mod ctx;
-pub use ctx::{LE, BE};
 use core::marker::PhantomData;
+pub use ctx::{BE, LE};
 
 /// A specialized Result type for `Byte`
 pub type Result<T> = core::result::Result<T, Error>;
@@ -197,7 +197,8 @@ pub fn check_len(bytes: &[u8], len: usize) -> Result<usize> {
 
 /// A data structure that can be deserialized. Types implement this trait can be `read()` from byte slice.
 pub trait TryRead<'a, Ctx = ()>
-    where Self: Sized
+where
+    Self: Sized,
 {
     /// Try to read from bytes using context.
     ///
@@ -277,8 +278,9 @@ pub trait BytesExt<Ctx> {
     /// assert_eq!(bool2, true);
     /// ```
     fn read<'a, T>(&'a self, offset: &mut usize) -> Result<T>
-        where T: TryRead<'a, Ctx>,
-              Ctx: Default
+    where
+        T: TryRead<'a, Ctx>,
+        Ctx: Default,
     {
         self.read_with(offset, Default::default())
     }
@@ -297,8 +299,8 @@ pub trait BytesExt<Ctx> {
     /// assert_eq!(str, "hello, world");
     /// ```
     fn read_with<'a, T>(&'a self, offset: &mut usize, ctx: Ctx) -> Result<T>
-        where T: TryRead<'a, Ctx>;
-
+    where
+        T: TryRead<'a, Ctx>;
 
     /// Read multiple values of same type by iterator.
     ///
@@ -321,8 +323,9 @@ pub trait BytesExt<Ctx> {
     /// assert_eq!(offset, 22);
     /// ```
     fn read_iter<'a, 'i, T>(&'a self, offset: &'i mut usize, ctx: Ctx) -> Iter<'a, 'i, T, Ctx>
-        where T: TryRead<'a, Ctx>,
-              Ctx: Clone;
+    where
+        T: TryRead<'a, Ctx>,
+        Ctx: Clone;
 
     /// Write value into byte slice by default context
     ///
@@ -336,11 +339,12 @@ pub trait BytesExt<Ctx> {
     /// bytes.write(&mut 0, false).unwrap();
     /// bytes.write(&mut 1, true).unwrap();
     ///
-    /// assert_eq!(bytes, [0, 0xff]);
+    /// assert_eq!(bytes, [0, 0x01]);
     /// ```
     fn write<T>(&mut self, offset: &mut usize, t: T) -> Result<()>
-        where T: TryWrite<Ctx>,
-              Ctx: Default
+    where
+        T: TryWrite<Ctx>,
+        Ctx: Default,
     {
         self.write_with(offset, t, Default::default())
     }
@@ -363,14 +367,15 @@ pub trait BytesExt<Ctx> {
     /// assert_eq!(bytes_le, [0xff, 0]);
     /// ```
     fn write_with<T>(&mut self, offset: &mut usize, t: T, ctx: Ctx) -> Result<()>
-        where T: TryWrite<Ctx>;
+    where
+        T: TryWrite<Ctx>;
 }
-
 
 impl<Ctx> BytesExt<Ctx> for [u8] {
     #[inline]
     fn read_with<'a, T>(&'a self, offset: &mut usize, ctx: Ctx) -> Result<T>
-        where T: TryRead<'a, Ctx>
+    where
+        T: TryRead<'a, Ctx>,
     {
         let slice = self.as_ref();
 
@@ -382,15 +387,16 @@ impl<Ctx> BytesExt<Ctx> for [u8] {
             Ok((t, size)) => {
                 *offset += size;
                 Ok(t)
-            },
+            }
             Err(Error::BadOffset(_)) => Err(Error::Incomplete),
             Err(err) => Err(err),
         }
     }
 
     fn read_iter<'a, 'i, T>(&'a self, offset: &'i mut usize, ctx: Ctx) -> Iter<'a, 'i, T, Ctx>
-        where T: TryRead<'a, Ctx>,
-              Ctx: Clone
+    where
+        T: TryRead<'a, Ctx>,
+        Ctx: Clone,
     {
         Iter {
             bytes: self.as_ref(),
@@ -401,7 +407,8 @@ impl<Ctx> BytesExt<Ctx> for [u8] {
     }
 
     fn write_with<T>(&mut self, offset: &mut usize, t: T, ctx: Ctx) -> Result<()>
-        where T: TryWrite<Ctx>
+    where
+        T: TryWrite<Ctx>,
     {
         let slice = self.as_mut();
 
@@ -413,7 +420,7 @@ impl<Ctx> BytesExt<Ctx> for [u8] {
             Ok(size) => {
                 *offset += size;
                 Ok(())
-            },
+            }
             Err(Error::BadOffset(_)) => Err(Error::Incomplete),
             Err(err) => Err(err),
         }
@@ -442,8 +449,9 @@ impl<Ctx> BytesExt<Ctx> for [u8] {
 /// ```
 #[must_use = "iterator adaptors are lazy and do nothing unless consumed"]
 pub struct Iter<'a, 'i, T, Ctx>
-    where T: TryRead<'a, Ctx>,
-          Ctx: Clone
+where
+    T: TryRead<'a, Ctx>,
+    Ctx: Clone,
 {
     bytes: &'a [u8],
     offset: &'i mut usize,
@@ -452,8 +460,9 @@ pub struct Iter<'a, 'i, T, Ctx>
 }
 
 impl<'a, 'i, T, Ctx> Iterator for Iter<'a, 'i, T, Ctx>
-    where T: TryRead<'a, Ctx>,
-          Ctx: Clone
+where
+    T: TryRead<'a, Ctx>,
+    Ctx: Clone,
 {
     type Item = T;
 
@@ -462,9 +471,9 @@ impl<'a, 'i, T, Ctx> Iterator for Iter<'a, 'i, T, Ctx>
         TryRead::try_read(&self.bytes[*self.offset..], self.ctx.clone())
             .ok()
             .map(|(t, size)| {
-                     *self.offset += size;
-                     t
-                 })
+                *self.offset += size;
+                t
+            })
     }
 
     #[inline]
